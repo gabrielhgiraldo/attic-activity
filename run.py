@@ -1,5 +1,6 @@
 from collections import deque
 from functools import partial
+import time
 
 from utils.config import ROBOFLOW_API_KEY, VIDEO_INPUT
 from utils.audio import trigger_fox_sounds
@@ -20,6 +21,10 @@ def get_box_center(x, y, w, h):
 
 
 class AtticSupervisor:
+
+    detections = deque(maxlen=100)
+    last_sound_trigger = 0
+
     def __init__(self, video_reference, video_output):
         self.video_reference = video_reference
         # TODO: allow input directly from camera
@@ -30,8 +35,6 @@ class AtticSupervisor:
             DEFAULT_BBOX_ANNOTATOR,
             sv.DotAnnotator()
         ]
-        self.detections = deque(maxlen=100)
-
         self.pipeline = InferencePipeline.init(
             video_reference=[self.video_reference],
             api_key=ROBOFLOW_API_KEY,
@@ -41,7 +44,8 @@ class AtticSupervisor:
 
     def _on_prediction(self, prediction: dict, video_frame:VideoFrame):
         detections:sv.Detections = sv.Detections.from_inference(prediction)
-        if len(detections) > 0:
+        if len(detections) > 0 and (time.time() - self.last_sound_trigger) > 30:
+            self.last_sound_trigger = time.time()
             trigger_fox_sounds()
         # detections = detections[detections.area > 1000]
         render_boxes(
