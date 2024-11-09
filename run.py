@@ -2,10 +2,13 @@ from collections import deque
 from functools import partial
 
 from utils.config import ROBOFLOW_API_KEY, VIDEO_INPUT
+from utils.audio import trigger_fox_sounds
 
 import cv2
 from inference import get_roboflow_model, InferencePipeline
-from inference.core.interfaces.stream.sinks import render_boxes, display_image, ImageWithSourceID
+from inference.core.interfaces.stream.sinks import (
+    render_boxes, DEFAULT_BBOX_ANNOTATOR, DEFAULT_LABEL_ANNOTATOR
+)
 from inference.core.interfaces.camera.entities import VideoFrame
 import supervision as sv
 
@@ -22,8 +25,11 @@ class AtticSupervisor:
         # TODO: allow input directly from camera
         self.video_info = sv.VideoInfo.from_video_path(self.video_reference)
         self.video_sink = sv.VideoSink(video_output, self.video_info)
-        self.label_annotator = sv.LabelAnnotator()
-        self.box_annotator = sv.BoxAnnotator()
+        self.annotator = [
+            DEFAULT_LABEL_ANNOTATOR,
+            DEFAULT_BBOX_ANNOTATOR,
+            sv.DotAnnotator()
+        ]
         self.detections = deque(maxlen=100)
 
         self.pipeline = InferencePipeline.init(
@@ -33,26 +39,16 @@ class AtticSupervisor:
             on_prediction=self._on_prediction
         )
 
-    def process_frame(self, image:ImageWithSourceID, detections:sv.Detections):
-        centers = [get_box_center(*box) for box in detections.xyxy]
-        print(centers)
-        annotated_frame = self.annotate_frame(image[1], centers)
-        cv2.imshow("Attic Activity", annotated_frame)
-        cv2.waitKey(1)
-        
-
-    def annotate_frame(self, frame, centroids):
-        # annotated_frame = self.box_annotator.annotate(frame.copy(), detections)
-        annotated_frame = frame.copy()
-        for centroid in centroids:
-            print(centroid)
-            cv2.circle(annotated_frame, centroid, 0, color=(0,0, 255), thickness=2)
-        return annotated_frame
-
     def _on_prediction(self, prediction: dict, video_frame:VideoFrame):
         detections:sv.Detections = sv.Detections.from_inference(prediction)
+        if len(detections) > 0:
+            trigger_fox_sounds()
         # detections = detections[detections.area > 1000]
-        render_boxes(prediction, video_frame, on_frame_rendered=partial(self.process_frame, detections=detections))
+        render_boxes(
+            predictions=prediction,
+            video_frame=video_frame,
+            annotator=self.annotator
+        )
 
     def start(self):
         self.pipeline.start()
