@@ -5,7 +5,7 @@ import supervision as sv
 
 # TODO: incorporate perspective correction/surfaces
 
-def create_sliding_zones(display_size=(1280,720), shift_size=100, zone_width=200):
+def create_sliding_zones(display_size=(1280,720), shift_size=40, zone_width=50):
     w, h = display_size
     n_x_shifts = (w-zone_width)//shift_size
     n_y_shifts = (h-zone_width)//shift_size
@@ -26,5 +26,5 @@ def get_trap_placements(detections, zones:List[sv.PolygonZone]):
         zone.trigger(detections)
     return [zone for zone in sorted(zones, key=lambda x: x.current_count, reverse=True) if zone.current_count > 0]
 
-def get_trap_annotators(zones:List[sv.PolygonZone], n_traps=3):
+def get_trap_annotators(zones:List[sv.PolygonZone], n_traps=10):
     return [sv.PolygonZoneAnnotator(zone=zone, color=sv.Color.GREEN, thickness=4) for zone in zones[:n_traps]]
