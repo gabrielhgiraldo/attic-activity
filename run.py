@@ -93,7 +93,7 @@ class AtticSupervisor:
         # annotate potential accessways for traps/remediation
         for i, annotator in enumerate(get_trap_annotators(self.trap_placements, n_traps=20)):
             annotator.annotate(video_frame.image, label=f"trap {i}")
-        for i, annotator in enumerate(get_trap_annotators(list(self.accessways), n_traps=5, color=sv.Color.RED)):
+        for i, annotator in enumerate(get_trap_annotators(list(self.accessways), n_traps=10, color=sv.Color.RED)):
             annotator.annotate(video_frame.image, label=f'access {i}')
 
     def _handle_video_frames(self, video_frames:List[VideoFrame]):
