@@ -124,7 +124,6 @@ class AtticSupervisor:
                 self.update_trap_placements()
             self.last_detections = detections
             self.last_detection_time = detection_time
-
         
         self.annotate_frame(video_frame)
         # detections = detections[detections.area > 1000]
