@@ -3,19 +3,19 @@ from functools import partial
 import time
 from typing import List
 
-from utils.config import ROBOFLOW_API_KEY, VIDEO_INPUT
+from utils.config import (
+    ROBOFLOW_API_KEY, VIDEO_INPUT, NOISE_DURATION_S, ACCESSWAY_DELAY_S, TRAP_PLACEMENT_DELAY_S
+)
 from utils.audio import trigger_fox_sounds
 from utils.traps import create_sliding_zones, trigger_activity_zones, get_trap_annotators
 
-from inference import get_roboflow_model, InferencePipeline
+from inference import InferencePipeline
 from inference.core.interfaces.stream.sinks import (
     render_boxes, DEFAULT_BBOX_ANNOTATOR, DEFAULT_LABEL_ANNOTATOR, VideoFileSink, multi_sink
 )
 from inference.core.interfaces.camera.entities import VideoFrame
 from inference_sdk import InferenceHTTPClient
-import numpy as np
 import supervision as sv
-
 
 # TODO: scale up to multiple simultaneous rodents
 class AtticSupervisor:
@@ -75,7 +75,7 @@ class AtticSupervisor:
             )
     
     def update_accessways(self, detections):
-        if time.time() - self.last_detection_time > 10:
+        if time.time() - self.last_detection_time > ACCESSWAY_DELAY_S:
             try:
                 entry_zone:sv.PolygonZone = trigger_activity_zones(detections, self.activity_zones)[0]
                 self.accessways.add(entry_zone)
@@ -90,7 +90,7 @@ class AtticSupervisor:
                     print('failed to detect exit zone')
     
     def update_trap_placements(self):
-        if len(self.historical_detections) > 10 and (time.time() - self.last_trap_placement) > 5:
+        if len(self.historical_detections) > 10 and (time.time() - self.last_trap_placement) > TRAP_PLACEMENT_DELAY_S:
             self.last_trap_placement = time.time()
             self.trap_placements = trigger_activity_zones(self.historical_detections, self.activity_zones)
 
@@ -114,8 +114,8 @@ class AtticSupervisor:
             # check for potential entry/exit
             self.update_accessways(detections)
             # trigger noise on detection
-            if time.time() - self.last_sound_trigger > 30:
-                self.last_sound_trigger = time.time()
+            if detection_time - self.last_sound_trigger > NOISE_DURATION_S:
+                self.last_sound_trigger = detection_time
                 trigger_fox_sounds()
             self.update_trap_placements()
             self.last_detections = detections
