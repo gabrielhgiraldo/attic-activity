@@ -17,14 +17,23 @@ def create_sliding_zones(display_size=(1280,720), shift_size=40, zone_width=50):
             x2 = x1+zone_width
             y2 = y1+zone_width
             polygon = np.array([[x1, y1], [x1, y2], [x2, y2], [x2, y1]])
-            zones.append(sv.PolygonZone(polygon=polygon))
+            zones.append(sv.PolygonZone(polygon=polygon, triggering_anchors=[sv.Position.CENTER,]))
     return zones
 
 
-def get_trap_placements(detections, zones:List[sv.PolygonZone]):
+def trigger_activity_zones(detections, zones:List[sv.PolygonZone]):
     for zone in zones:
         zone.trigger(detections)
     return [zone for zone in sorted(zones, key=lambda x: x.current_count, reverse=True) if zone.current_count > 0]
 
-def get_trap_annotators(zones:List[sv.PolygonZone], n_traps=10):
-    return [sv.PolygonZoneAnnotator(zone=zone, color=sv.Color.GREEN, thickness=4) for zone in zones[:n_traps]]
+def get_trap_annotators(zones:List[sv.PolygonZone], n_traps=20, color=sv.Color.GREEN):
+    return [
+        sv.PolygonZoneAnnotator(
+            zone=zone,
+            color=color,
+            text_scale=0.3,
+            thickness=1,
+            display_in_zone_count=True
+        )
+        for zone in zones[:n_traps]
+    ]
