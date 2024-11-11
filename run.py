@@ -11,6 +11,7 @@ from inference.core.interfaces.stream.sinks import (
     render_boxes, DEFAULT_BBOX_ANNOTATOR, DEFAULT_LABEL_ANNOTATOR, VideoFileSink, multi_sink
 )
 from inference.core.interfaces.camera.entities import VideoFrame
+from inference_sdk import InferenceHTTPClient
 import numpy as np
 import supervision as sv
 
@@ -23,7 +24,9 @@ class AtticSupervisor:
     last_trap_placement = 0
     trap_placements = []
 
-    def __init__(self, video_reference, video_output):
+    def __init__(self, video_reference, video_output, use_server=True):
+        if not isinstance(video_reference, list):
+            video_reference = [video_reference]
         self.video_reference = video_reference
         self.activity_zones = create_sliding_zones()
         
@@ -37,19 +40,33 @@ class AtticSupervisor:
             sv.DotAnnotator(),
             # sv.HeatMapAnnotator(),
         ]
+        if use_server:
+            self.inference_client = InferenceHTTPClient(
+                api_key=ROBOFLOW_API_KEY,
+                api_url='http://localhost:9001'
+                # api_url='https://detect.roboflow.com'
+            )
 
         self.video_sink = VideoFileSink.init(
             video_file_name=video_output,
             annotator=self.annotator
         )
-                
-        self.pipeline = InferencePipeline.init(
-            video_reference=[self.video_reference],
-            # api_key=ROBOFLOW_API_KEY,
-            model_id='attic-activity/2',
-            # on_prediction=partial(multi_sink, sinks=[self.video_sink.on_prediction, self._on_prediction])
-            on_prediction=self._on_prediction
-        )
+        if use_server:
+            self.pipeline = InferencePipeline.init_with_custom_logic(
+                video_reference=self.video_reference,
+                # api_key=ROBOFLOW_API_KEY,
+                # model_id='attic-activity/2',
+                on_video_frame=lambda video_frames:[self.inference_client.infer(video_frame.image, model_id='attic-activity/2') for video_frame in video_frames],
+                # on_prediction=partial(multi_sink, sinks=[self.video_sink.on_prediction, self._on_prediction])
+                on_prediction=self._on_prediction
+            )
+        else:
+            self.pipeline = InferencePipeline.init(
+                video_reference=self.video_reference,
+                api_key=ROBOFLOW_API_KEY,
+                model_id='attic-activity/2',
+                on_prediction=self._on_prediction
+            )
 
     def _on_prediction(self, prediction: dict, video_frame:VideoFrame):
         detections:sv.Detections = sv.Detections.from_inference(prediction)
@@ -84,7 +101,8 @@ class AtticSupervisor:
 if __name__ == "__main__":
     supervisor = AtticSupervisor(
         video_reference=VIDEO_INPUT,
-        video_output='./data/output.mp4'
+        video_output='./data/output.mp4',
+        use_server=True
     )
     try:
        supervisor.start()
