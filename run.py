@@ -9,6 +9,7 @@ from utils.config import (
 from utils.audio import trigger_fox_sounds
 from utils.traps import create_sliding_zones, trigger_activity_zones, get_trap_annotators
 
+import cv2
 from inference import InferencePipeline
 from inference.core.interfaces.stream.sinks import (
     render_boxes, DEFAULT_BBOX_ANNOTATOR, DEFAULT_LABEL_ANNOTATOR, VideoFileSink, multi_sink
@@ -25,6 +26,7 @@ class AtticSupervisor:
     last_sound_trigger = 0
     last_trap_placement = 0
     last_detection_time = 0
+    last_save_time = 0
     trap_placements = []
 
     def __init__(self, video_reference, video_output, use_server=True):
@@ -75,24 +77,22 @@ class AtticSupervisor:
             )
     
     def update_accessways(self, detections):
-        if time.time() - self.last_detection_time > ACCESSWAY_DELAY_S:
-            try:
-                entry_zone:sv.PolygonZone = trigger_activity_zones(detections, self.activity_zones)[0]
-                self.accessways.add(entry_zone)
-            except IndexError:
-                print('failed to detect entry zone')
+        try:
+            entry_zone:sv.PolygonZone = trigger_activity_zones(detections, self.activity_zones)[0]
+            self.accessways.add(entry_zone)
+        except IndexError:
+            print('failed to detect entry zone')
 
-            if self.last_detection_time is not None:
-                try:
-                    exit_zone = trigger_activity_zones(self.last_detections, self.activity_zones)[0]
-                    self.accessways.add(exit_zone)
-                except:
-                    print('failed to detect exit zone')
+        if self.last_detection_time is not None:
+            try:
+                exit_zone = trigger_activity_zones(self.last_detections, self.activity_zones)[0]
+                self.accessways.add(exit_zone)
+            except:
+                print('failed to detect exit zone')
     
     def update_trap_placements(self):
-        if len(self.historical_detections) > 10 and (time.time() - self.last_trap_placement) > TRAP_PLACEMENT_DELAY_S:
-            self.last_trap_placement = time.time()
-            self.trap_placements = trigger_activity_zones(self.historical_detections, self.activity_zones)
+        self.last_trap_placement = time.time()
+        self.trap_placements = trigger_activity_zones(self.historical_detections, self.activity_zones)
 
     def annotate_frame(self, video_frame:VideoFrame):
         # annotate potential accessways for traps/remediation
@@ -112,18 +112,25 @@ class AtticSupervisor:
             # detection_time = video_frame.frame_timestamp.timestamp()
             detection_time = time.time()
             # check for potential entry/exit
-            self.update_accessways(detections)
+            if time.time() - self.last_detection_time > ACCESSWAY_DELAY_S:
+                self.update_accessways(detections)
             # trigger noise on detection
             if detection_time - self.last_sound_trigger > NOISE_DURATION_S:
                 self.last_sound_trigger = detection_time
                 trigger_fox_sounds()
-            self.update_trap_placements()
+                
+            if len(self.historical_detections) > 10 and (time.time() - self.last_trap_placement) > TRAP_PLACEMENT_DELAY_S:
+                self.update_trap_placements()
             self.last_detections = detections
             self.last_detection_time = detection_time
 
         
         self.annotate_frame(video_frame)
         # detections = detections[detections.area > 1000]
+        if time.time() - self.last_save_time > 10:
+            cv2.imwrite('data/attic_activity.jpg', video_frame.image)
+            self.last_save_time = time.time()
+
         render_boxes(
             predictions=prediction,
             video_frame=video_frame,
