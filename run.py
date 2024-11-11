@@ -21,7 +21,6 @@ import supervision as sv
 # TODO: scale up to multiple simultaneous rodents
 class AtticSupervisor:
 
-    historical_detections = sv.Detections.empty()
     last_detections = sv.Detections.empty()
     last_sound_trigger = 0
     last_trap_placement = 0
@@ -38,10 +37,8 @@ class AtticSupervisor:
         self.accessways = set()
         self.trigger_sounds = trigger_sounds
         
-        # self.video_info = sv.VideoInfo.from_video_path(self.video_reference)
-        # self.video_sink = sv.VideoSink(video_output, self.video_info)
-
         self.fps_monitor = sv.FPSMonitor()
+
         self.annotator = [
             DEFAULT_LABEL_ANNOTATOR,
             DEFAULT_BBOX_ANNOTATOR,
@@ -58,9 +55,6 @@ class AtticSupervisor:
         self.video_sink = VideoFileSink.init(
             video_file_name=video_output,
             annotator=self.annotator,
-            fps_monitor=self.fps_monitor,
-            display_statistics=True,
-            output_fps=12
         )
         if use_server:
             self.pipeline = InferencePipeline.init_with_custom_logic(
@@ -91,9 +85,9 @@ class AtticSupervisor:
             except:
                 print('failed to detect exit zone')
     
-    def update_trap_placements(self):
+    def update_trap_placements(self, detections):
         self.last_trap_placement = time.time()
-        self.trap_placements = trigger_activity_zones(self.historical_detections, self.activity_zones)
+        self.trap_placements = trigger_activity_zones(detections, self.activity_zones)
 
     def annotate_frame(self, video_frame:VideoFrame):
         # annotate potential accessways for traps/remediation
@@ -107,7 +101,6 @@ class AtticSupervisor:
 
     def _on_prediction(self, prediction: dict, video_frame:VideoFrame):
         detections:sv.Detections = sv.Detections.from_inference(prediction)
-        self.historical_detections = detections if self.historical_detections.is_empty() else sv.Detections.merge([self.historical_detections, detections])
         
         if len(detections) > 0:
             # detection_time = video_frame.frame_timestamp.timestamp()
@@ -120,8 +113,8 @@ class AtticSupervisor:
                 self.last_sound_trigger = detection_time
                 trigger_fox_sounds()
                 
-            if len(self.historical_detections) > 10 and (time.time() - self.last_trap_placement) > TRAP_PLACEMENT_DELAY_S:
-                self.update_trap_placements()
+            if(time.time() - self.last_trap_placement) > TRAP_PLACEMENT_DELAY_S:
+                self.update_trap_placements(detections)
             self.last_detections = detections
             self.last_detection_time = detection_time
         

@@ -23,7 +23,9 @@ def create_sliding_zones(display_size=(1280,720), shift_size=40, zone_width=50):
 
 def trigger_activity_zones(detections, zones:List[sv.PolygonZone]):
     for zone in zones:
+        previous_count = zone.current_count
         zone.trigger(detections)
+        zone.current_count += previous_count
     return [zone for zone in sorted(zones, key=lambda x: x.current_count, reverse=True) if zone.current_count > 0]
 
 def get_trap_annotators(zones:List[sv.PolygonZone], n_traps=20, color=sv.Color.GREEN):
