@@ -29,13 +29,14 @@ class AtticSupervisor:
     last_save_time = 0
     trap_placements = []
 
-    def __init__(self, video_reference, video_output, use_server=True):
+    def __init__(self, video_reference, video_output, use_server=True, trigger_sounds=True):
         if not isinstance(video_reference, list):
             video_reference = [video_reference]
         self.video_reference = video_reference
         self.activity_zones = create_sliding_zones()
         self.time_since_last_detection = 0
         self.accessways = set()
+        self.trigger_sounds = trigger_sounds
         
         # self.video_info = sv.VideoInfo.from_video_path(self.video_reference)
         # self.video_sink = sv.VideoSink(video_output, self.video_info)
@@ -115,7 +116,7 @@ class AtticSupervisor:
             if time.time() - self.last_detection_time > ACCESSWAY_DELAY_S:
                 self.update_accessways(detections)
             # trigger noise on detection
-            if detection_time - self.last_sound_trigger > NOISE_DURATION_S:
+            if self.trigger_sounds and detection_time - self.last_sound_trigger > NOISE_DURATION_S:
                 self.last_sound_trigger = detection_time
                 trigger_fox_sounds()
                 
@@ -151,6 +152,7 @@ if __name__ == "__main__":
     supervisor = AtticSupervisor(
         video_reference=VIDEO_INPUT,
         video_output='./data/output.mp4',
+        trigger_sounds=False,
         use_server=True
     )
     try:
